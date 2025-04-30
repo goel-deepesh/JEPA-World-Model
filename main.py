@@ -1,7 +1,7 @@
 from dataset import create_wall_dataloader
 from evaluator import ProbingEvaluator
 import torch
-from models import MockModel
+from models import MockModel, MainModel
 import glob
 
 
@@ -47,7 +47,10 @@ def load_data(device):
 def load_model():
     """Load or initialize the model."""
     # TODO: Replace MockModel with your trained model
-    model = MockModel()
+    device = get_device()
+    model = MainModel()
+    model.load_state_dict(torch.load("checkpoint/best_model.pth", weights_only=True))
+    model.to(device)
     return model
 
 
