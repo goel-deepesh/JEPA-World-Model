@@ -1,7 +1,38 @@
 from typing import NamedTuple, Optional
 import torch
 import numpy as np
+from torch.utils.data import Dataset 
 
+class TrajectoryDataset(Dataset):
+    def __init__(self, data_dir, states_filename, actions_filename, s_transform=None, a_transform=None,
+                 length=None):
+        self.states = np.load(f"{data_dir}/{states_filename}", mmap_mode="r")
+        self.actions = np.load(f"{data_dir}/{actions_filename}")
+        if length is None:
+            length = len(self.states)
+        
+        self.states = self.states[:length]
+        self.actions = self.actions[:length]
+
+        self.state_transform = s_transform
+        self.action_transform = a_transform
+    
+    def __len__(self):
+        return self.states.shape[0]
+    
+    def __getitem__(self, index):
+        state = self.states[index]
+        action = self.actions[index]
+        
+        if self.state_transform:
+            for i in range(state.shape[0]):
+                state[i] = self.state_transform(state[i])
+        
+        if self.action_transform:
+            for i in range(action[i].shape[0]):
+                action[i] = self.action_transform(action[i])
+        
+        return state, action
 
 class WallSample(NamedTuple):
     states: torch.Tensor
@@ -10,12 +41,7 @@ class WallSample(NamedTuple):
 
 
 class WallDataset:
-    def __init__(
-        self,
-        data_path,
-        probing=False,
-        device="cuda",
-    ):
+    def __init__(self, data_path, probing=False, device="cuda"):
         self.device = device
         self.states = np.load(f"{data_path}/states.npy", mmap_mode="r")
         self.actions = np.load(f"{data_path}/actions.npy")
