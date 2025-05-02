@@ -77,7 +77,7 @@ def load_model():
     # TODO: Replace MockModel with your trained model
     device = get_device()
     model = MainModel()
-    model.load_state_dict(torch.load("continued_training/jepa_model_epoch_final.pth", weights_only=True))
+    model.load_state_dict(torch.load("jepa_model_epoch_final.pth", weights_only=True))
     model.to(device)
     return model
 
