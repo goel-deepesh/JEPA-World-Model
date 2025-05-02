@@ -87,23 +87,24 @@ class WallEncoder(nn.Module):
             h = (h - 1) // conv_stride + 1
             w = (w - 1) // conv_stride + 1
             
-        # Convolutional layers
-        self.conv_net = nn.Sequential(
+        # Rename from conv_net to cnn_model
+        self.cnn_model = nn.Sequential(
             nn.Conv2d(in_channels, 32, 3, stride=conv_stride, padding=1),
             nn.ReLU(),
             nn.Conv2d(32, 64, 3, stride=conv_stride, padding=1),
             nn.ReLU(),
         )
         
-        # Final projection layer
-        self.projection = nn.Linear(h * w * 64, latent_dim)
+        # Rename from projection to fully_connected
+        self.fully_connected = nn.Linear(h * w * 64, latent_dim)
         self.flatten = nn.Flatten()
         
     def forward(self, x):
+        # Remove time dimension for single frame processing
         x = x.squeeze(1)
-        features = self.conv_net(x)
+        features = self.cnn_model(x)
         flattened = self.flatten(features)
-        embedding = self.projection(flattened)
+        embedding = self.fully_connected(flattened)
         return embedding
 
 
@@ -126,15 +127,16 @@ class AgentEncoder(nn.Module):
             h = (h - 1) // conv_stride + 1
             w = (w - 1) // conv_stride + 1
             
-        # Convolutional network
-        self.conv_net = nn.Sequential(
+        # Rename from conv_net to cnn_model
+        self.cnn_model = nn.Sequential(
             nn.Conv2d(in_channels, 32, 3, stride=conv_stride, padding=1),
             nn.ReLU(),
             nn.Conv2d(32, 64, 3, stride=conv_stride, padding=1),
             nn.ReLU(),
         )
         
-        self.projection = nn.Linear(h * w * 64, latent_dim)
+        # Rename from projection to fully_connected
+        self.fully_connected = nn.Linear(h * w * 64, latent_dim)
         self.flatten = nn.Flatten(start_dim=1)
         
     def forward(self, x):
@@ -143,9 +145,9 @@ class AgentEncoder(nn.Module):
         # Reshape to process all timesteps at once
         reshaped_x = x.reshape(batch_size * timesteps, channels, h, w)
         
-        features = self.conv_net(reshaped_x)
+        features = self.cnn_model(reshaped_x)
         flattened = self.flatten(features)
-        embeddings = self.projection(flattened)
+        embeddings = self.fully_connected(flattened)
         
         # Restore batch and time dimensions
         return embeddings.reshape(batch_size, timesteps, -1)
@@ -160,15 +162,16 @@ class CombinedEncoder(nn.Module):
                 output_dim=128):
         super().__init__()
         
-        self.agent_encoder = AgentEncoder(latent_dim=output_dim)
-        self.fusion_layer = nn.Linear(
-            self.agent_encoder.latent_dim + env_dim, 
+        self.observation_encoder = AgentEncoder(latent_dim=output_dim)
+        # Rename from fusion_layer to fully_connected
+        self.fully_connected = nn.Linear(
+            self.observation_encoder.latent_dim + env_dim, 
             output_dim
         )
     
     def forward(self, observations, env_context):
         # Encode agent observations
-        agent_features = self.agent_encoder(observations)
+        agent_features = self.observation_encoder(observations)
         
         batch_size, timesteps, _ = agent_features.shape
         
@@ -182,7 +185,7 @@ class CombinedEncoder(nn.Module):
         reshaped = combined.reshape(batch_size * timesteps, -1)
         
         # Apply fusion layer
-        fused = self.fusion_layer(reshaped)
+        fused = self.fully_connected(reshaped)
         
         # Restore shape
         return fused.reshape(batch_size, timesteps, -1)
@@ -198,14 +201,14 @@ class StatePredictor(nn.Module):
         action_encoding_size = 16
         combined_size = action_encoding_size + input_dim
         
-        # Action encoder
-        self.action_encoder = nn.Sequential(
+        # Rename from action_encoder to a_embed
+        self.a_embed = nn.Sequential(
             nn.Linear(2, action_encoding_size),
             nn.ReLU()
         )
         
-        # Prediction network
-        self.predictor = nn.Sequential(
+        # Rename from predictor to fully_connected
+        self.fully_connected = nn.Sequential(
             nn.Linear(combined_size, output_dim * 4),
             nn.ReLU(),
             nn.Linear(output_dim * 4, output_dim)
@@ -213,13 +216,13 @@ class StatePredictor(nn.Module):
         
     def forward(self, state_embedding, action):
         # Encode action
-        action_embedding = self.action_encoder(action)
+        action_embedding = self.a_embed(action)
         
         # Combine state and action
         combined = torch.cat([state_embedding, action_embedding], dim=1)
         
         # Predict next state
-        prediction = self.predictor(combined)
+        prediction = self.fully_connected(combined)
         return prediction
 
 
@@ -246,18 +249,16 @@ class MainModel(nn.Module):
     """
     def __init__(self, 
                 repr_dim=128, 
-                is_training=False):
+                training_mode=False):
         super().__init__()
         
-        self.repr_dim = repr_dim
-        self.is_training = is_training
+        self.repr_dim = repr_dim  # Rename embedding_size to repr_dim
+        self.training_mode = training_mode
         
-        # Encoders
-        self.environment_encoder = WallEncoder(latent_dim=repr_dim)
-        self.state_encoder = CombinedEncoder(env_dim=repr_dim, output_dim=repr_dim)
-        
-        # Predictor
-        self.next_state_predictor = StatePredictor(input_dim=repr_dim, output_dim=repr_dim)
+        # Rename model components to match saved weights
+        self.env_encoder = WallEncoder(latent_dim=self.repr_dim)
+        self.parent_encoder = CombinedEncoder(env_dim=self.repr_dim, output_dim=self.repr_dim)
+        self.predictor = StatePredictor(input_dim=self.repr_dim, output_dim=self.repr_dim)
     
     def forward(self, states, actions):
         """
@@ -274,33 +275,32 @@ class MainModel(nn.Module):
         batch_size, _, _ = actions.shape
         
         # Split agent and wall channels
-        agent_channel = states[:, :, 0:1, :, :]
-        wall_channel = states[:, :, 1:2, :, :]
+        path, wall = (states[:, :, i:i+1, :, :].clone() for i in range(2))
         
         # Encode environment (wall)
-        env_embedding = self.environment_encoder(wall_channel[:, :1])
+        env_encoding = self.env_encoder(wall[:, :1])
         
         # Encode initial state
-        initial_state = self.state_encoder(agent_channel[:, :1], env_embedding)
+        inital_state_encoding = self.parent_encoder(path[:, :1], env_encoding)
         
         # Pre-compute target encodings for training
-        target_encodings = None
-        if self.is_training:
-            target_encodings = self.state_encoder(agent_channel[:, 1:], env_embedding)
+        encoded_state_embeddings = None
+        if self.training_mode:
+            encoded_state_embeddings = self.parent_encoder(path[:, 1:], env_encoding)
         
         # Autoregressive prediction of future states
-        predictions = [initial_state[:, 0]]
+        predicted_state_embeddings = [inital_state_encoding[:, 0]]
         for t in range(actions.shape[1]):
-            next_state = self.next_state_predictor(
-                predictions[-1],
+            next_state = self.predictor(
+                predicted_state_embeddings[-1],
                 actions[:, t]
             )
-            predictions.append(next_state)
+            predicted_state_embeddings.append(next_state)
         
         # Stack predictions along time dimension
-        predictions = torch.stack(predictions, dim=1)
+        predicted_state_embeddings = torch.stack(predicted_state_embeddings, dim=1)
         
-        return env_embedding, predictions, target_encodings
+        return env_encoding, predicted_state_embeddings, encoded_state_embeddings
         
     def loss(self, predictions, targets, env_context):
         """
@@ -329,13 +329,13 @@ class MainModel(nn.Module):
         env_std = torch.sqrt(centered_env.var(dim=0) + 1e-4)
         
         # Variance loss
-        variance_loss = (
+        std_loss = (
             torch.mean(F.relu(1 - pred_std)) / 2 +
             torch.mean(F.relu(1 - target_std)) / 2
         )
         
         # Environment variance loss
-        env_variance_loss = torch.mean(F.relu(1 - env_std)) / 2
+        env_std_loss = torch.mean(F.relu(1 - env_std)) / 2
         
         # Covariance loss
         pred_cov = (flat_preds.T @ flat_preds) / (batch_size * timesteps - 1)
@@ -346,4 +346,4 @@ class MainModel(nn.Module):
             extract_nondiagonal(target_cov).pow(2).sum() / self.repr_dim
         )
         
-        return mse_loss, variance_loss, cov_loss, env_variance_loss
+        return mse_loss, std_loss, cov_loss, env_std_loss
