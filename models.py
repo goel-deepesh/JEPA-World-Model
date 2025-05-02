@@ -245,19 +245,19 @@ class MainModel(nn.Module):
     that predicts state representations in a self-supervised manner.
     """
     def __init__(self, 
-                embedding_size=128, 
+                repr_dim=128, 
                 is_training=False):
         super().__init__()
         
-        self.embedding_size = embedding_size
+        self.repr_dim = repr_dim
         self.is_training = is_training
         
         # Encoders
-        self.environment_encoder = WallEncoder(latent_dim=embedding_size)
-        self.state_encoder = CombinedEncoder(env_dim=embedding_size, output_dim=embedding_size)
+        self.environment_encoder = WallEncoder(latent_dim=repr_dim)
+        self.state_encoder = CombinedEncoder(env_dim=repr_dim, output_dim=repr_dim)
         
         # Predictor
-        self.next_state_predictor = StatePredictor(input_dim=embedding_size, output_dim=embedding_size)
+        self.next_state_predictor = StatePredictor(input_dim=repr_dim, output_dim=repr_dim)
     
     def forward(self, states, actions):
         """
@@ -342,8 +342,8 @@ class MainModel(nn.Module):
         target_cov = (flat_targets.T @ flat_targets) / (batch_size * timesteps - 1)
         
         cov_loss = (
-            extract_nondiagonal(pred_cov).pow(2).sum() / self.embedding_size +
-            extract_nondiagonal(target_cov).pow(2).sum() / self.embedding_size
+            extract_nondiagonal(pred_cov).pow(2).sum() / self.repr_dim +
+            extract_nondiagonal(target_cov).pow(2).sum() / self.repr_dim
         )
         
         return mse_loss, variance_loss, cov_loss, env_variance_loss
