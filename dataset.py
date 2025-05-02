@@ -3,36 +3,68 @@ import torch
 import numpy as np
 from torch.utils.data import Dataset 
 
-class TrajectoryDataset(Dataset):
-    def __init__(self, data_dir, states_filename, actions_filename, s_transform=None, a_transform=None,
-                 length=None):
-        self.states = np.load(f"{data_dir}/{states_filename}", mmap_mode="r")
-        self.actions = np.load(f"{data_dir}/{actions_filename}")
-        if length is None:
-            length = len(self.states)
-        
-        self.states = self.states[:length]
-        self.actions = self.actions[:length]
 
-        self.state_transform = s_transform
-        self.action_transform = a_transform
+class AgentTrajectoryData(Dataset):
+    """
+    Dataset for loading and processing agent trajectories.
+    
+    Parameters:
+        data_dir: Root directory containing the data files
+        states_filename: Filename for the states array
+        actions_filename: Filename for the actions array
+        s_transform: Optional transformation applied to state data
+        a_transform: Optional transformation applied to action data
+        length: Optional parameter to limit dataset size
+        
+    Data format:
+        - States: numpy array with shape (num_trajectories, sequence_length, 2, 65, 65)
+        - Actions: numpy array with shape (num_trajectories, sequence_length, 2)
+    """
+    def __init__(self, 
+                 data_dir, 
+                 states_filename, 
+                 actions_filename, 
+                 s_transform=None, 
+                 a_transform=None,
+                 length=None):
+        # Load data arrays from files
+        state_path = f"{data_dir}/{states_filename}"
+        action_path = f"{data_dir}/{actions_filename}"
+        
+        # Use memory mapping for efficient loading of large arrays
+        self.observation_data = np.load(state_path, mmap_mode="r")
+        self.motion_data = np.load(action_path)
+        
+        # Limit dataset size if specified
+        if length is not None:
+            self.observation_data = self.observation_data[:length]
+            self.motion_data = self.motion_data[:length]
+        
+        # Store transform functions
+        self.obs_transform = s_transform
+        self.motion_transform = a_transform
     
     def __len__(self):
-        return self.states.shape[0]
+        """Return the number of trajectories in the dataset."""
+        return self.observation_data.shape[0]
     
-    def __getitem__(self, index):
-        state = self.states[index]
-        action = self.actions[index]
+    def __getitem__(self, idx):
+        """Retrieve a single trajectory pair (observations, actions)."""
+        # Get the raw data for the requested index
+        obs = self.observation_data[idx]
+        motion = self.motion_data[idx]
         
-        if self.state_transform:
-            for i in range(state.shape[0]):
-                state[i] = self.state_transform(state[i])
+        # Apply transformations if specified
+        if self.obs_transform:
+            for frame_idx in range(obs.shape[0]):
+                obs[frame_idx] = self.obs_transform(obs[frame_idx])
         
-        if self.action_transform:
-            for i in range(action[i].shape[0]):
-                action[i] = self.action_transform(action[i])
+        if self.motion_transform:
+            for action_idx in range(motion.shape[0]):
+                motion[action_idx] = self.motion_transform(motion[action_idx])
         
-        return state, action
+        return obs, motion
+
 
 class WallSample(NamedTuple):
     states: torch.Tensor
@@ -41,7 +73,12 @@ class WallSample(NamedTuple):
 
 
 class WallDataset:
-    def __init__(self, data_path, probing=False, device="cuda"):
+    def __init__(
+        self,
+        data_path,
+        probing=False,
+        device="cuda",
+    ):
         self.device = device
         self.states = np.load(f"{data_path}/states.npy", mmap_mode="r")
         self.actions = np.load(f"{data_path}/actions.npy")
