@@ -9,7 +9,7 @@ import torchvision.transforms as transforms
 import torch.optim as optim
 from tqdm import tqdm
 
-from dataset import TrajectoryDataset
+from dataset import AgentTrajectoryData
 from models import MainModel  
 
 def setup_compute_device():
@@ -129,7 +129,7 @@ if __name__ == "__main__":
     
     # Configure dataset
     print("Loading trajectory dataset...")
-    trajectory_dataset = TrajectoryDataset(
+    trajectory_dataset = AgentTrajectoryData(
         data_dir="/scratch/DL25SP/train",
         states_filename="states.npy",
         actions_filename="actions.npy",
