@@ -39,7 +39,7 @@ def checkpoint_model(model_state, current_epoch, output_dir="model_checkpoints",
 def execute_training_loop(
     world_model, 
     data_iterator, 
-    training_epochs=50, 
+    training_epochs=60, 
     lr=1e-4, 
     compute_device=None
 ):
@@ -152,7 +152,7 @@ if __name__ == "__main__":
     world_model.to(compute_device)
     
     # Configure training parameters
-    training_epochs = 30
+    training_epochs = 60
     learning_rate = 1e-4
     
     # Execute training loop
