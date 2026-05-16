@@ -1,6 +1,6 @@
 # JEPA World Model for Two-Room Navigation
 
-A PyTorch implementation of a **Joint Embedding Predictive Architecture (JEPA)** world model trained on 2.5M frames of agent trajectories in a two-room environment. This project explores self-supervised representation learning for spatial reasoning and multi-step prediction, without any image reconstruction objective. Ranked **top 5 of ~30 teams** in a competitive evaluation and presented to **Prof. Yann LeCun**.
+A PyTorch implementation of a **Joint Embedding Predictive Architecture (JEPA)** world model trained on 2.5M frames of agent trajectories in a two-room environment. This project explores self-supervised representation learning for spatial reasoning and multi-step prediction, without any image reconstruction objective.
 
 ---
 
