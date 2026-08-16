@@ -102,7 +102,7 @@ Lower MSE means richer, more spatially informative representations.
 ### Installation
 
 ```bash
-git clone https://github.com/goel-deepesh/Advanced-Topic-Modeling-and-Clustering
+git clone https://github.com/goel-deepesh/JEPA-World-Model
 cd <repo>
 pip install -r requirements.txt
 ```
